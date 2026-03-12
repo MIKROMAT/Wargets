@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeGuard - Parent Dashboard</title>
+    <!-- PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; padding: 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        header { text-align: center; color: white; margin-bottom: 30px; }
+        header h1 { font-size: 2.5rem; margin-bottom: 10px; }
+        
+        .panel {
+            background: white; border-radius: 20px; padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2); margin-bottom: 20px;
+        }
+        
+        .connection-box {
+            background: #f0f9ff; border: 3px dashed #3b82f6;
+            border-radius: 15px; padding: 40px; text-align: center;
+        }
+        .peer-id {
+            font-size: 3rem; font-weight: bold; color: #3b82f6;
+            letter-spacing: 10px; margin: 20px 0; font-family: monospace;
+            background: white; padding: 20px; border-radius: 10px;
+            display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .status {
+            display: inline-block; padding: 10px 20px; border-radius: 20px;
+            font-weight: 600; margin-top: 10px;
+        }
+        .status.waiting { background: #fef3c7; color: #92400e; }
+        .status.connected { background: #d1fae5; color: #065f46; }
+        
+        .controls {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;
+            margin-top: 20px;
+        }
+        .btn {
+            padding: 20px; border: none; border-radius: 12px;
+            font-size: 1rem; font-weight: 600; cursor: pointer;
+            transition: all 0.3s; display: flex; align-items: center;
+            justify-content: center; gap: 10px;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-mic { background: #dbeafe; color: #1e40af; }
+        .btn-cam { background: #fce7f3; color: #9d174d; }
+        .btn-loc { background: #d1fae5; color: #065f46; }
+        .btn-screen { background: #fef3c7; color: #92400e; }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .btn.active { animation: pulse 1.5s infinite; border: 2px solid #ef4444; }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        
+        .preview {
+            margin-top: 20px; background: #000; border-radius: 15px;
+            overflow: hidden; position: relative; min-height: 300px;
+        }
+        video { width: 100%; height: 300px; object-fit: cover; display: none; }
+        video.active { display: block; }
+        .placeholder {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); color: white;
+            text-align: center; opacity: 0.5;
+        }
+        .live-badge {
+            position: absolute; top: 15px; right: 15px;
+            background: #ef4444; color: white; padding: 8px 16px;
+            border-radius: 20px; font-weight: 700; display: none;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        
+        .logs {
+            margin-top: 20px; background: #f8fafc; border-radius: 10px;
+            padding: 15px; font-family: monospace; font-size: 0.85rem;
+            max-height: 200px; overflow-y: auto;
+        }
+        .log { padding: 8px; border-left: 3px solid #3b82f6; margin-bottom: 5px; background: white; }
+        .log-time { color: #6b7280; font-size: 0.75rem; }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>👨‍👩‍👧 SafeGuard Parent</h1>
+            <p>Dashboard Kontrol Anak</p>
+        </header>
+
+        <div class="panel">
+            <div class="connection-box" id="connBox">
+                <h2 style="margin-bottom: 15px;">🆔 ID Koneksi Anda</h2>
+                <p style="color: #6b7280; margin-bottom: 20px;">Berikan ID ini ke anak untuk menghubungkan</p>
+                
+                <div class="peer-id" id="peerId">LOADING...</div>
+                
+                <div class="status waiting" id="status">Menunggu koneksi...</div>
+                
+                <div style="margin-top: 20px; padding: 15px; background: white; border-radius: 10px;">
+                    <strong>📱 Instruksi untuk anak:</strong><br>
+                    Buka <code>child.html</code> dan masukkan ID di atas
+                </div>
+            </div>
+
+            <div id="controlsBox" class="hidden">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>🎮 Kontrol Perangkat</h3>
+                    <span class="status connected">● Terhubung</span>
+                </div>
+                
+                <div class="controls">
+                    <button class="btn btn-mic" id="btnMic" onclick="toggle('mic')">
+                        🎤 Microphone
+                    </button>
+                    <button class="btn btn-cam" id="btnCam" onclick="toggle('cam')">
+                        📹 Kamera
+                    </button>
+                    <button class="btn btn-loc" id="btnLoc" onclick="toggle('loc')">
+                        📍 Lokasi
+                    </button>
+                    <button class="btn btn-screen" id="btnScreen" onclick="toggle('screen')">
+                        ⏺️ Screen
+                    </button>
+                </div>
+
+                <div class="preview">
+                    <video id="videoPreview" autoplay playsinline></video>
+                    <div class="placeholder" id="placeholder">
+                        <div style="font-size: 4rem;">📱</div>
+                        <div>Preview akan muncul di sini</div>
+                    </div>
+                    <div class="live-badge" id="liveBadge">🔴 LIVE</div>
+                </div>
+            </div>
+
+            <div class="logs" id="logs">
+                <div class="log">
+                    <div class="log-time">--:--:--</div>
+                    <div>Menghubungkan ke server...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let peer, conn, call;
+        let activeStreams = {};
+
+        // Initialize PeerJS
+        peer = new Peer();
+        
+        peer.on('open', (id) => {
+            document.getElementById('peerId').textContent = id;
+            log('✅ ID siap: ' + id);
+            log('Menunggu anak menghubungkan...');
+        });
+
+        peer.on('connection', (connection) => {
+            conn = connection;
+            log('📱 Anak terhubung!');
+            
+            document.getElementById('connBox').classList.add('hidden');
+            document.getElementById('controlsBox').classList.remove('hidden');
+            
+            conn.on('data', (data) => {
+                if (data.type === 'location') {
+                    log(`📍 Lokasi: ${data.lat.toFixed(6)}, ${data.lng.toFixed(6)}`);
+                } else if (data.type === 'permission_denied') {
+                    log('❌ Anak menolak: ' + data.feature);
+                    document.getElementById('btn' + data.feature.charAt(0).toUpperCase() + data.feature.slice(1)).classList.remove('active');
+                }
+            });
+        });
+
+        peer.on('call', (incomingCall) => {
+            call = incomingCall;
+            call.answer(); // Answer without stream (we receive only)
+            
+            call.on('stream', (remoteStream) => {
+                const video = document.getElementById('videoPreview');
+                video.srcObject = remoteStream;
+                video.classList.add('active');
+                document.getElementById('placeholder').classList.add('hidden');
+                document.getElementById('liveBadge').style.display = 'block';
+                log('📹 Stream diterima dari anak');
+            });
+        });
+
+        function toggle(feature) {
+            if (!conn) return;
+            
+            const btn = document.getElementById('btn' + feature.charAt(0).toUpperCase() + feature.slice(1));
+            
+            if (btn.classList.contains('active')) {
+                // Stop
+                btn.classList.remove('active');
+                conn.send({ type: 'stop', feature: feature });
+                log('⏹️ Menghentikan ' + feature);
+                
+                if (feature === 'cam' || feature === 'screen') {
+                    document.getElementById('videoPreview').classList.remove('active');
+                    document.getElementById('placeholder').classList.remove('hidden');
+                    document.getElementById('liveBadge').style.display = 'none';
+                }
+            } else {
+                // Start
+                btn.classList.add('active');
+                conn.send({ type: 'request', feature: feature });
+                log('📤 Meminta izin: ' + feature);
+            }
+        }
+
+        function log(msg) {
+            const logs = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = 'log';
+            const time = new Date().toLocaleTimeString('id-ID');
+            entry.innerHTML = `<div class="log-time">${time}</div><div>${msg}</div>`;
+            logs.insertBefore(entry, logs.firstChild);
+        }
+    </script>
+</body>
+</html>
